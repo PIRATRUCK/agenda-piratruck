@@ -70,6 +70,17 @@
 </header>
 
 <div class="wrap">
+  <!-- quem é você -->
+  <section id="secUser">
+    <h2>👤 Quem é você?</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="curUser" onchange="setCurUser(this.value)" style="max-width:260px;font-weight:700"><option value="">— selecione seu nome —</option></select>
+      <button class="btn btn-cinza btn-sm" onclick="addUser()">+ Adicionar pessoa</button>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:600;color:var(--mut)"><input type="checkbox" id="verTodos" onchange="render()" style="width:auto"> ver todos</label>
+    </div>
+    <p class="mut" id="curInfo" style="margin:8px 0 0">Selecione seu nome pra ver e lançar na sua agenda.</p>
+  </section>
+
   <!-- novo compromisso -->
   <section>
     <h2>➕ Novo compromisso</h2>
@@ -86,12 +97,9 @@
           <option value="Outro">Outro</option>
         </select></div>
     </div>
-    <div class="row">
-      <div><label>Responsável (usuário)</label><input list="usuarios" id="eUser" placeholder="ex.: Kayque, Vandalberto, Wesley..."></div>
-      <div><label>Local / observação</label><input id="eObs" placeholder="opcional"></div>
-    </div>
-    <datalist id="usuarios"></datalist>
-    <div style="margin-top:12px"><button class="btn btn-azul" onclick="addEvento()">Salvar compromisso</button></div>
+    <div><label>Local / observação</label><input id="eObs" placeholder="opcional"></div>
+    <div style="margin-top:12px"><button class="btn btn-azul" onclick="addEvento()">Salvar compromisso</button>
+      <span class="mut" id="lancComo" style="margin-left:10px"></span></div>
   </section>
 
   <!-- calendário -->
@@ -100,10 +108,6 @@
       <button class="btn btn-cinza btn-sm" onclick="mudarMes(-1)">◀</button>
       <b id="calTitulo">—</b>
       <button class="btn btn-cinza btn-sm" onclick="mudarMes(1)">▶</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <label style="margin:0">👤 Ver:</label>
-      <select id="fUser" onchange="render()" style="width:auto"><option value="">Todos os usuários</option></select>
     </div>
     <div class="grid" id="dows"></div>
     <div class="grid" id="calGrid" style="margin-top:4px"></div>
@@ -141,8 +145,9 @@ var FB_CONFIG = { apiKey:"AIzaSyCjrbTh9_yovb2CRtsXNL6fuOEyXnpFvcY", authDomain:"
 var COLLECTION = "agenda";
 var CORES = { "Reunião":"#0b5cad", "Pagamento":"#b91c1c", "Entrega":"#f5b700", "Pessoal":"#15803d", "Outro":"#64748b" };
 
+var USERS_COLLECTION = "agenda_usuarios";
 var fbApp=null, fbAuth=null, fbDb=null, MEU_UID=null;
-var EVENTOS=[]; var mesRef=null; /* Date apontando pro 1º dia do mês visível */
+var EVENTOS=[]; var USERS=[]; var CUR=""; var mesRef=null; /* Date apontando pro 1º dia do mês visível */
 
 function fmt2(n){ return (n<10?"0":"")+n; }
 function hoje(){ var d=new Date(); return d.getFullYear()+"-"+fmt2(d.getMonth()+1)+"-"+fmt2(d.getDate()); }
@@ -163,36 +168,52 @@ function doLogin(){
 }
 function logout(){ if(fbAuth) fbAuth.signOut(); }
 
-/* firestore — agenda COMPARTILHADA (todos veem; separa/filtra por usuário) */
+/* firestore — agenda COMPARTILHADA; cada um escolhe o próprio nome */
 function startDb(){
-  fbDb.collection(COLLECTION)
-    .onSnapshot(function(snap){ EVENTOS=[]; snap.forEach(function(d){ var o=d.data(); o.__id=d.id; EVENTOS.push(o); }); atualizarUsuarios(); render(); },
-    function(err){ console.warn("firestore:",err.message); });
+  fbDb.collection(COLLECTION).onSnapshot(function(snap){
+    EVENTOS=[]; snap.forEach(function(d){ var o=d.data(); o.__id=d.id; EVENTOS.push(o); }); render();
+  }, function(err){ console.warn("firestore:",err.message); });
+  fbDb.collection(USERS_COLLECTION).onSnapshot(function(snap){
+    USERS=[]; snap.forEach(function(d){ var o=d.data(); if(o&&o.nome) USERS.push(o.nome); });
+    /* também considera nomes que já aparecem em eventos antigos */
+    EVENTOS.forEach(function(o){ if(o.usuario && USERS.indexOf(o.usuario)<0) USERS.push(o.usuario); });
+    USERS.sort(); preencherSeletorUsers();
+  }, function(err){ console.warn("users:",err.message); });
 }
-function atualizarUsuarios(){
-  var set={}; EVENTOS.forEach(function(o){ if(o.usuario) set[o.usuario]=1; });
-  var nomes=Object.keys(set).sort();
-  /* datalist do formulário */
-  document.getElementById("usuarios").innerHTML=nomes.map(function(n){return '<option value="'+n+'">';}).join("");
-  /* filtro (preserva seleção atual) */
-  var sel=document.getElementById("fUser"); var atual=sel.value;
-  sel.innerHTML='<option value="">Todos os usuários</option>'+nomes.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join("");
-  sel.value=atual;
+function preencherSeletorUsers(){
+  var sel=document.getElementById("curUser");
+  sel.innerHTML='<option value="">— selecione seu nome —</option>'+USERS.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join("");
+  if(CUR && USERS.indexOf(CUR)>=0) sel.value=CUR;
+}
+function addUser(){
+  var nome=(prompt("Nome da pessoa (aparece na lista de seleção):")||"").trim();
+  if(!nome) return;
+  if(USERS.indexOf(nome)>=0){ setCurUser(nome); document.getElementById("curUser").value=nome; return; }
+  fbDb.collection(USERS_COLLECTION).doc(nome.toLowerCase().replace(/[^a-z0-9]+/g,"-")).set({nome:nome})
+    .then(function(){ toast("Pessoa adicionada ✓"); setCurUser(nome); }).catch(function(e){ alert("Erro: "+e.message); });
+}
+function setCurUser(nome){
+  CUR=nome||""; try{ localStorage.setItem("agenda_user",CUR); }catch(e){}
+  var el=document.getElementById("curUser"); if(el) el.value=CUR;
+  document.getElementById("curInfo").textContent = CUR ? ("Você está como: "+CUR+". Novos compromissos entram na agenda de "+CUR+".") : "Selecione seu nome pra ver e lançar na sua agenda.";
+  document.getElementById("lancComo").textContent = CUR ? ("→ lançando como "+CUR) : "";
+  render();
 }
 function addEvento(){
+  if(!CUR) return alert("Primeiro selecione seu nome em \"Quem é você?\".");
   var tit=document.getElementById("eTit").value.trim();
   var data=document.getElementById("eData").value;
   if(!tit) return alert("Informe o título.");
   if(!data) return alert("Informe a data.");
   var o={ ownerUid:MEU_UID, titulo:tit, data:data, hora:document.getElementById("eHora").value||"",
-    tipo:document.getElementById("eTipo").value, usuario:(document.getElementById("eUser").value||"").trim(),
+    tipo:document.getElementById("eTipo").value, usuario:CUR,
     obs:document.getElementById("eObs").value.trim() };
   o.__id="ev-"+Date.now()+"-"+Math.floor(Math.random()*1000);
   fbDb.collection(COLLECTION).doc(o.__id).set(o).then(function(){ toast("Compromisso salvo ✓"); }).catch(function(e){ alert("Erro: "+e.message); });
   document.getElementById("eTit").value=""; document.getElementById("eHora").value=""; document.getElementById("eObs").value="";
 }
-function filtroUser(){ return (document.getElementById("fUser")||{}).value||""; }
-function passaFiltro(o){ var f=filtroUser(); return !f || o.usuario===f; }
+function verTodos(){ var c=document.getElementById("verTodos"); return c && c.checked; }
+function passaFiltro(o){ if(verTodos()) return true; if(!CUR) return true; return o.usuario===CUR; }
 function excluir(id){ if(!confirm("Excluir este compromisso?"))return; fbDb.collection(COLLECTION).doc(id).delete().then(function(){toast("Excluído")}); }
 
 /* calendário */
@@ -229,7 +250,7 @@ function renderProximos(){
   var hj=hoje();
   var fut=EVENTOS.filter(function(o){return (o.data||"")>=hj && passaFiltro(o);}).sort(function(a,b){ var c=(a.data||"").localeCompare(b.data||""); return c!==0?c:(a.hora||"").localeCompare(b.hora||""); });
   var box=document.getElementById("listaProx");
-  if(!fut.length){ box.innerHTML='<p class="mut">Nenhum compromisso futuro'+(filtroUser()?' para '+filtroUser():'')+'. 😌</p>'; return; }
+  if(!fut.length){ box.innerHTML='<p class="mut">Nenhum compromisso futuro'+((!verTodos()&&CUR)?' para '+CUR:'')+'. 😌</p>'; return; }
   box.innerHTML=fut.slice(0,30).map(function(o){
     var badge=o.data===hj?'<span class="pill hoje">HOJE</span>':'';
     var dataBR=(o.data||"").split("-").reverse().join("/");
@@ -244,6 +265,8 @@ function renderProximos(){
 window.addEventListener("load", function(){
   document.getElementById("eData").value=hoje();
   mesRef=new Date();
+  try{ CUR=localStorage.getItem("agenda_user")||""; }catch(e){ CUR=""; }
+  setCurUser(CUR);
   showLogin();
   fbApp=firebase.initializeApp(FB_CONFIG); fbAuth=firebase.auth(); fbDb=firebase.firestore();
   fbAuth.onAuthStateChanged(function(user){ if(user){ MEU_UID=user.uid; hideLogin(); startDb(); } else { MEU_UID=null; showLogin(); } });
