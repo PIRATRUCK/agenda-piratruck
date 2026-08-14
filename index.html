@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b5cad">
+<title>Agenda — Piratruck</title>
+<style>
+  :root{ --azul:#0b5cad; --amarelo:#f5b700; --verde:#15803d; --vermelho:#b91c1c;
+    --bg:#f1f5f9; --card:#fff; --linha:#e5e7eb; --txt:#0f172a; --mut:#64748b; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+  header{background:#fff;border-bottom:3px solid var(--amarelo);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:10}
+  header .brand{display:flex;align-items:center;gap:10px}
+  header .brand b{font-size:16px}
+  header .brand small{color:var(--mut);display:block;font-weight:400}
+  header .logo{width:38px;height:38px;border-radius:8px;background:var(--azul);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px}
+  .btn{border:none;border-radius:8px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
+  .btn-azul{background:var(--azul);color:#fff}
+  .btn-cinza{background:#e2e8f0;color:#334155}
+  .btn-sm{padding:6px 10px;font-size:13px}
+  .wrap{max-width:920px;margin:0 auto;padding:16px}
+  section{background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:16px;margin-top:14px}
+  section h2{margin:0 0 12px;font-size:16px;display:flex;align-items:center;gap:8px}
+  label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px;font-weight:600}
+  input,select,textarea{width:100%;border:1px solid var(--linha);border-radius:8px;padding:10px;font-size:14px;font-family:inherit;background:#fff}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  @media(max-width:640px){.row,.row3{grid-template-columns:1fr}}
+  .mut{color:var(--mut);font-size:13px}
+  /* calendário */
+  .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .calhead b{font-size:16px;text-transform:capitalize}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .dow{font-size:11px;color:var(--mut);text-align:center;font-weight:700;text-transform:uppercase;padding:2px 0}
+  .cell{min-height:74px;border:1px solid var(--linha);border-radius:8px;padding:3px;cursor:pointer;background:#fff;overflow:hidden}
+  .cell.fora{background:#f8fafc;opacity:.5}
+  .cell.hoje{border-color:var(--azul);box-shadow:inset 0 0 0 1px var(--azul)}
+  .cell .dnum{font-size:12px;font-weight:700;color:var(--mut)}
+  .cell.hoje .dnum{color:var(--azul)}
+  .ev{font-size:10px;line-height:1.3;color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media(max-width:640px){.cell{min-height:56px}.ev{font-size:9px}}
+  /* próximos */
+  .item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--linha)}
+  .item .dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex:0 0 10px}
+  .item .quando{font-size:12px;color:var(--mut)}
+  .item .tit{font-weight:700;font-size:14px}
+  .item .del{color:var(--vermelho);cursor:pointer;background:none;border:none;font-size:16px;margin-left:auto}
+  .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700}
+  .pill.hoje{background:#dbeafe;color:#1e40af}
+  .pill.atras{background:#fee2e2;color:#991b1b}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;transition:.2s;z-index:50}
+  .toast.on{opacity:1}
+  .legenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:10px}
+  .legenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  #ov{position:fixed;inset:0;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;z-index:100}
+  #ov .box{background:#fff;border-radius:14px;padding:24px;width:320px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  #ov h1{margin:0 0 4px;font-size:18px} #ov p{margin:0 0 16px;color:var(--mut);font-size:13px}
+  #ov .logo{width:48px;height:48px;border-radius:10px;background:var(--azul);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">📅</div>
+    <div><b>Agenda</b><small>Piratruck · compromissos</small></div>
+  </div>
+  <button class="btn btn-cinza btn-sm" onclick="logout()">Sair</button>
+</header>
+
+<div class="wrap">
+  <!-- novo compromisso -->
+  <section>
+    <h2>➕ Novo compromisso</h2>
+    <div><label>Título</label><input id="eTit" placeholder="ex.: Reunião com fornecedor"></div>
+    <div class="row3">
+      <div><label>Data</label><input type="date" id="eData"></div>
+      <div><label>Hora</label><input type="time" id="eHora"></div>
+      <div><label>Tipo</label>
+        <select id="eTipo">
+          <option value="Reunião">Reunião</option>
+          <option value="Pagamento">Pagamento</option>
+          <option value="Entrega">Entrega</option>
+          <option value="Pessoal">Pessoal</option>
+          <option value="Outro">Outro</option>
+        </select></div>
+    </div>
+    <div><label>Local / observação</label><input id="eObs" placeholder="opcional"></div>
+    <div style="margin-top:12px"><button class="btn btn-azul" onclick="addEvento()">Salvar compromisso</button></div>
+  </section>
+
+  <!-- calendário -->
+  <section>
+    <div class="calhead">
+      <button class="btn btn-cinza btn-sm" onclick="mudarMes(-1)">◀</button>
+      <b id="calTitulo">—</b>
+      <button class="btn btn-cinza btn-sm" onclick="mudarMes(1)">▶</button>
+    </div>
+    <div class="grid" id="dows"></div>
+    <div class="grid" id="calGrid" style="margin-top:4px"></div>
+    <div class="legenda" id="legenda"></div>
+  </section>
+
+  <!-- próximos -->
+  <section>
+    <h2>🔔 Próximos compromissos</h2>
+    <div id="listaProx"></div>
+  </section>
+</div>
+
+<div id="ov">
+  <div class="box">
+    <div class="logo">📅</div>
+    <h1>Agenda Piratruck</h1>
+    <p>Acesso privado — entre com seu login.</p>
+    <input id="lEmail" type="email" placeholder="E-mail" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    <div style="height:8px"></div>
+    <input id="lPass" type="password" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="lMsg" style="display:none;color:#b91c1c;font-size:12px;margin:8px 0"></div>
+    <div style="height:12px"></div>
+    <button class="btn btn-azul" style="width:100%" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+var FB_CONFIG = { apiKey:"AIzaSyCjrbTh9_yovb2CRtsXNL6fuOEyXnpFvcY", authDomain:"painel-veiculos-4a6f5.firebaseapp.com", projectId:"painel-veiculos-4a6f5", storageBucket:"painel-veiculos-4a6f5.firebasestorage.app", messagingSenderId:"910089422875", appId:"1:910089422875:web:fbca3bf5d3f2bdeea950be" };
+var COLLECTION = "agenda";
+var CORES = { "Reunião":"#0b5cad", "Pagamento":"#b91c1c", "Entrega":"#f5b700", "Pessoal":"#15803d", "Outro":"#64748b" };
+
+var fbApp=null, fbAuth=null, fbDb=null, MEU_UID=null;
+var EVENTOS=[]; var mesRef=null; /* Date apontando pro 1º dia do mês visível */
+
+function fmt2(n){ return (n<10?"0":"")+n; }
+function hoje(){ var d=new Date(); return d.getFullYear()+"-"+fmt2(d.getMonth()+1)+"-"+fmt2(d.getDate()); }
+function toast(m){ var t=document.getElementById("toast"); t.textContent=m; t.classList.add("on"); setTimeout(function(){t.classList.remove("on")},1800); }
+function cor(tp){ return CORES[tp]||"#64748b"; }
+
+/* login */
+function showLogin(){ document.getElementById("ov").style.display="flex"; }
+function hideLogin(){ document.getElementById("ov").style.display="none"; }
+function doLogin(){
+  var email=document.getElementById("lEmail").value.trim(), pass=document.getElementById("lPass").value;
+  var m=document.getElementById("lMsg"); m.style.display="none";
+  fbAuth.signInWithEmailAndPassword(email,pass).catch(function(err){
+    var c=(err&&err.code)||"erro";
+    var map={"auth/invalid-credential":"E-mail ou senha incorretos.","auth/wrong-password":"Senha incorreta.","auth/user-not-found":"Usuário não encontrado.","auth/invalid-email":"E-mail inválido.","auth/unauthorized-domain":"Domínio não autorizado no Firebase.","auth/operation-not-allowed":"Login por e-mail/senha não ativado."};
+    m.textContent=map[c]||("Erro: "+c); m.style.display="block";
+  });
+}
+function logout(){ if(fbAuth) fbAuth.signOut(); }
+
+/* firestore */
+function startDb(){
+  fbDb.collection(COLLECTION).where("ownerUid","==",MEU_UID)
+    .onSnapshot(function(snap){ EVENTOS=[]; snap.forEach(function(d){ var o=d.data(); o.__id=d.id; EVENTOS.push(o); }); render(); },
+    function(err){ console.warn("firestore:",err.message); });
+}
+function addEvento(){
+  var tit=document.getElementById("eTit").value.trim();
+  var data=document.getElementById("eData").value;
+  if(!tit) return alert("Informe o título.");
+  if(!data) return alert("Informe a data.");
+  var o={ ownerUid:MEU_UID, titulo:tit, data:data, hora:document.getElementById("eHora").value||"",
+    tipo:document.getElementById("eTipo").value, obs:document.getElementById("eObs").value.trim() };
+  o.__id="ev-"+Date.now()+"-"+Math.floor(Math.random()*1000);
+  fbDb.collection(COLLECTION).doc(o.__id).set(o).then(function(){ toast("Compromisso salvo ✓"); }).catch(function(e){ alert("Erro: "+e.message); });
+  document.getElementById("eTit").value=""; document.getElementById("eHora").value=""; document.getElementById("eObs").value="";
+}
+function excluir(id){ if(!confirm("Excluir este compromisso?"))return; fbDb.collection(COLLECTION).doc(id).delete().then(function(){toast("Excluído")}); }
+
+/* calendário */
+function mudarMes(d){ mesRef.setMonth(mesRef.getMonth()+d); render(); }
+function eventosDoDia(ymd){ return EVENTOS.filter(function(o){return o.data===ymd;}).sort(function(a,b){return (a.hora||"").localeCompare(b.hora||"");}); }
+
+function render(){
+  if(!mesRef) mesRef=new Date();
+  var DOW=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  document.getElementById("dows").innerHTML=DOW.map(function(d){return '<div class="dow">'+d+'</div>';}).join("");
+  var MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  var y=mesRef.getFullYear(), m=mesRef.getMonth();
+  document.getElementById("calTitulo").textContent=MES[m]+" "+y;
+  var primeiro=new Date(y,m,1); var offset=primeiro.getDay();
+  var inicio=new Date(y,m,1-offset);
+  var hj=hoje();
+  var html="";
+  for(var i=0;i<42;i++){
+    var d=new Date(inicio.getFullYear(),inicio.getMonth(),inicio.getDate()+i);
+    var ymd=d.getFullYear()+"-"+fmt2(d.getMonth()+1)+"-"+fmt2(d.getDate());
+    var fora=d.getMonth()!==m;
+    var evs=eventosDoDia(ymd);
+    var chips=evs.slice(0,3).map(function(o){ return '<div class="ev" style="background:'+cor(o.tipo)+'" title="'+(o.hora?o.hora+' ':'')+o.titulo.replace(/"/g,'')+'">'+(o.hora?o.hora+' ':'')+o.titulo+'</div>'; }).join("");
+    if(evs.length>3) chips+='<div class="mut" style="font-size:9px;margin-top:1px">+'+(evs.length-3)+' mais</div>';
+    html+='<div class="cell'+(fora?' fora':'')+(ymd===hj?' hoje':'')+'" onclick="selDia(\''+ymd+'\')"><div class="dnum">'+d.getDate()+'</div>'+chips+'</div>';
+  }
+  document.getElementById("calGrid").innerHTML=html;
+  document.getElementById("legenda").innerHTML=Object.keys(CORES).map(function(k){return '<span><i style="background:'+CORES[k]+'"></i>'+k+'</span>';}).join("");
+  renderProximos();
+}
+function selDia(ymd){ document.getElementById("eData").value=ymd; document.getElementById("eTit").focus(); toast("Data "+ymd.split("-").reverse().join("/")+" selecionada"); }
+
+function renderProximos(){
+  var hj=hoje();
+  var fut=EVENTOS.filter(function(o){return (o.data||"")>=hj;}).sort(function(a,b){ var c=(a.data||"").localeCompare(b.data||""); return c!==0?c:(a.hora||"").localeCompare(b.hora||""); });
+  var box=document.getElementById("listaProx");
+  if(!fut.length){ box.innerHTML='<p class="mut">Nenhum compromisso futuro. Que tranquilidade 😌</p>'; return; }
+  box.innerHTML=fut.slice(0,30).map(function(o){
+    var badge=o.data===hj?'<span class="pill hoje">HOJE</span>':'';
+    var dataBR=(o.data||"").split("-").reverse().join("/");
+    return '<div class="item"><span class="dot" style="background:'+cor(o.tipo)+'"></span>'+
+      '<div><div class="tit">'+o.titulo+' '+badge+'</div>'+
+      '<div class="quando">'+dataBR+(o.hora?' · '+o.hora:'')+' · '+o.tipo+(o.obs?' · '+o.obs:'')+'</div></div>'+
+      '<button class="del" onclick="excluir(\''+o.__id+'\')">×</button></div>';
+  }).join("");
+}
+
+window.addEventListener("load", function(){
+  document.getElementById("eData").value=hoje();
+  mesRef=new Date();
+  showLogin();
+  fbApp=firebase.initializeApp(FB_CONFIG); fbAuth=firebase.auth(); fbDb=firebase.firestore();
+  fbAuth.onAuthStateChanged(function(user){ if(user){ MEU_UID=user.uid; hideLogin(); startDb(); } else { MEU_UID=null; showLogin(); } });
+});
+</script>
+</body>
+</html>
