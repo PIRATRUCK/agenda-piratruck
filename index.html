@@ -86,7 +86,11 @@
           <option value="Outro">Outro</option>
         </select></div>
     </div>
-    <div><label>Local / observação</label><input id="eObs" placeholder="opcional"></div>
+    <div class="row">
+      <div><label>Responsável (usuário)</label><input list="usuarios" id="eUser" placeholder="ex.: Kayque, Vandalberto, Wesley..."></div>
+      <div><label>Local / observação</label><input id="eObs" placeholder="opcional"></div>
+    </div>
+    <datalist id="usuarios"></datalist>
     <div style="margin-top:12px"><button class="btn btn-azul" onclick="addEvento()">Salvar compromisso</button></div>
   </section>
 
@@ -96,6 +100,10 @@
       <button class="btn btn-cinza btn-sm" onclick="mudarMes(-1)">◀</button>
       <b id="calTitulo">—</b>
       <button class="btn btn-cinza btn-sm" onclick="mudarMes(1)">▶</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <label style="margin:0">👤 Ver:</label>
+      <select id="fUser" onchange="render()" style="width:auto"><option value="">Todos os usuários</option></select>
     </div>
     <div class="grid" id="dows"></div>
     <div class="grid" id="calGrid" style="margin-top:4px"></div>
@@ -155,11 +163,21 @@ function doLogin(){
 }
 function logout(){ if(fbAuth) fbAuth.signOut(); }
 
-/* firestore */
+/* firestore — agenda COMPARTILHADA (todos veem; separa/filtra por usuário) */
 function startDb(){
-  fbDb.collection(COLLECTION).where("ownerUid","==",MEU_UID)
-    .onSnapshot(function(snap){ EVENTOS=[]; snap.forEach(function(d){ var o=d.data(); o.__id=d.id; EVENTOS.push(o); }); render(); },
+  fbDb.collection(COLLECTION)
+    .onSnapshot(function(snap){ EVENTOS=[]; snap.forEach(function(d){ var o=d.data(); o.__id=d.id; EVENTOS.push(o); }); atualizarUsuarios(); render(); },
     function(err){ console.warn("firestore:",err.message); });
+}
+function atualizarUsuarios(){
+  var set={}; EVENTOS.forEach(function(o){ if(o.usuario) set[o.usuario]=1; });
+  var nomes=Object.keys(set).sort();
+  /* datalist do formulário */
+  document.getElementById("usuarios").innerHTML=nomes.map(function(n){return '<option value="'+n+'">';}).join("");
+  /* filtro (preserva seleção atual) */
+  var sel=document.getElementById("fUser"); var atual=sel.value;
+  sel.innerHTML='<option value="">Todos os usuários</option>'+nomes.map(function(n){return '<option value="'+n+'">'+n+'</option>';}).join("");
+  sel.value=atual;
 }
 function addEvento(){
   var tit=document.getElementById("eTit").value.trim();
@@ -167,16 +185,19 @@ function addEvento(){
   if(!tit) return alert("Informe o título.");
   if(!data) return alert("Informe a data.");
   var o={ ownerUid:MEU_UID, titulo:tit, data:data, hora:document.getElementById("eHora").value||"",
-    tipo:document.getElementById("eTipo").value, obs:document.getElementById("eObs").value.trim() };
+    tipo:document.getElementById("eTipo").value, usuario:(document.getElementById("eUser").value||"").trim(),
+    obs:document.getElementById("eObs").value.trim() };
   o.__id="ev-"+Date.now()+"-"+Math.floor(Math.random()*1000);
   fbDb.collection(COLLECTION).doc(o.__id).set(o).then(function(){ toast("Compromisso salvo ✓"); }).catch(function(e){ alert("Erro: "+e.message); });
   document.getElementById("eTit").value=""; document.getElementById("eHora").value=""; document.getElementById("eObs").value="";
 }
+function filtroUser(){ return (document.getElementById("fUser")||{}).value||""; }
+function passaFiltro(o){ var f=filtroUser(); return !f || o.usuario===f; }
 function excluir(id){ if(!confirm("Excluir este compromisso?"))return; fbDb.collection(COLLECTION).doc(id).delete().then(function(){toast("Excluído")}); }
 
 /* calendário */
 function mudarMes(d){ mesRef.setMonth(mesRef.getMonth()+d); render(); }
-function eventosDoDia(ymd){ return EVENTOS.filter(function(o){return o.data===ymd;}).sort(function(a,b){return (a.hora||"").localeCompare(b.hora||"");}); }
+function eventosDoDia(ymd){ return EVENTOS.filter(function(o){return o.data===ymd && passaFiltro(o);}).sort(function(a,b){return (a.hora||"").localeCompare(b.hora||"");}); }
 
 function render(){
   if(!mesRef) mesRef=new Date();
@@ -194,7 +215,7 @@ function render(){
     var ymd=d.getFullYear()+"-"+fmt2(d.getMonth()+1)+"-"+fmt2(d.getDate());
     var fora=d.getMonth()!==m;
     var evs=eventosDoDia(ymd);
-    var chips=evs.slice(0,3).map(function(o){ return '<div class="ev" style="background:'+cor(o.tipo)+'" title="'+(o.hora?o.hora+' ':'')+o.titulo.replace(/"/g,'')+'">'+(o.hora?o.hora+' ':'')+o.titulo+'</div>'; }).join("");
+    var chips=evs.slice(0,3).map(function(o){ var u=o.usuario?' ['+o.usuario+']':''; return '<div class="ev" style="background:'+cor(o.tipo)+'" title="'+(o.hora?o.hora+' ':'')+(o.titulo+u).replace(/"/g,'')+'">'+(o.hora?o.hora+' ':'')+o.titulo+'</div>'; }).join("");
     if(evs.length>3) chips+='<div class="mut" style="font-size:9px;margin-top:1px">+'+(evs.length-3)+' mais</div>';
     html+='<div class="cell'+(fora?' fora':'')+(ymd===hj?' hoje':'')+'" onclick="selDia(\''+ymd+'\')"><div class="dnum">'+d.getDate()+'</div>'+chips+'</div>';
   }
@@ -206,15 +227,16 @@ function selDia(ymd){ document.getElementById("eData").value=ymd; document.getEl
 
 function renderProximos(){
   var hj=hoje();
-  var fut=EVENTOS.filter(function(o){return (o.data||"")>=hj;}).sort(function(a,b){ var c=(a.data||"").localeCompare(b.data||""); return c!==0?c:(a.hora||"").localeCompare(b.hora||""); });
+  var fut=EVENTOS.filter(function(o){return (o.data||"")>=hj && passaFiltro(o);}).sort(function(a,b){ var c=(a.data||"").localeCompare(b.data||""); return c!==0?c:(a.hora||"").localeCompare(b.hora||""); });
   var box=document.getElementById("listaProx");
-  if(!fut.length){ box.innerHTML='<p class="mut">Nenhum compromisso futuro. Que tranquilidade 😌</p>'; return; }
+  if(!fut.length){ box.innerHTML='<p class="mut">Nenhum compromisso futuro'+(filtroUser()?' para '+filtroUser():'')+'. 😌</p>'; return; }
   box.innerHTML=fut.slice(0,30).map(function(o){
     var badge=o.data===hj?'<span class="pill hoje">HOJE</span>':'';
     var dataBR=(o.data||"").split("-").reverse().join("/");
+    var u=o.usuario?' · 👤 '+o.usuario:'';
     return '<div class="item"><span class="dot" style="background:'+cor(o.tipo)+'"></span>'+
       '<div><div class="tit">'+o.titulo+' '+badge+'</div>'+
-      '<div class="quando">'+dataBR+(o.hora?' · '+o.hora:'')+' · '+o.tipo+(o.obs?' · '+o.obs:'')+'</div></div>'+
+      '<div class="quando">'+dataBR+(o.hora?' · '+o.hora:'')+' · '+o.tipo+u+(o.obs?' · '+o.obs:'')+'</div></div>'+
       '<button class="del" onclick="excluir(\''+o.__id+'\')">×</button></div>';
   }).join("");
 }
